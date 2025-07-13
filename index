@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Live Dashboard – CodeSandbox</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #f0f4f8;
+        margin: 0;
+        padding: 20px;
+        color: #333;
+      }
+      h1 {
+        text-align: center;
+      }
+      .card {
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+      .card h2 {
+        margin-top: 0;
+      }
+      .item {
+        border-bottom: 1px solid #eee;
+        padding: 10px 0;
+      }
+      .item:last-child {
+        border-bottom: none;
+      }
+      .positive {
+        color: green;
+      }
+      .negative {
+        color: red;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🚀 Live Dashboard – CodeSandbox</h1>
+
+    <div class="card" id="news">
+      <h2>📰 Tech News</h2>
+      <div id="newsContent">Loading…</div>
+    </div>
+    <div class="card" id="crypto">
+      <h2>💰 Crypto</h2>
+      <div id="cryptoContent">Loading…</div>
+    </div>
+    <div class="card" id="github">
+      <h2>⭐ GitHub Trending</h2>
+      <div id="githubContent">Loading…</div>
+    </div>
+    <div class="card" id="hn">
+      <h2>🔥 Hacker News</h2>
+      <div id="hackerNewsContent">Loading…</div>
+    </div>
+
+    <script>
+      /* universal CORS proxy – works in CodeSandbox container */
+      const proxy = "https://corsproxy.io/?";
+      const fetchRemote = (url) =>
+        fetch(proxy + encodeURIComponent(url)).then((r) => r.json());
+
+      /* time helper */
+      const fmt = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+      const timeAgo = (d) => {
+        const s = Math.round((Date.now() - new Date(d)) / 1000);
+        return s < 60
+          ? "just now"
+          : s < 3600
+          ? fmt.format(-Math.round(s / 60), "minute")
+          : s < 86400
+          ? fmt.format(-Math.round(s / 3600), "hour")
+          : fmt.format(-Math.round(s / 86400), "day");
+      };
+
+      /* loaders */
+      async function loadNews() {
+        const c = document.getElementById("newsContent");
+        try {
+          const xml = await fetch(proxy + "https://techcrunch.com/feed/").then(
+            (r) => r.text()
+          );
+          const dom = new DOMParser().parseFromString(xml, "text/xml");
+          const items = [...dom.querySelectorAll("item")].slice(0, 5);
+          c.innerHTML = items
+            .map(
+              (i) => `
+          <div class="item">
+            <a href="${i.querySelector("link").textContent}" target="_blank">${
+                i.querySelector("title").textContent
+              }</a><br>
+            <small>${timeAgo(i.querySelector("pubDate").textContent)}</small>
+          </div>`
+            )
+            .join("");
+        } catch {
+          c.innerHTML = "Failed to load news.";
+        }
+      }
+
+      async function loadCrypto() {
+        const c = document.getElementById("cryptoContent");
+        try {
+          const data = await fetchRemote(
+            "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=5&page=1"
+          );
+          c.innerHTML = data
+            .map(
+              (coin) => `
+          <div class="item">
+            <strong>${
+              coin.name
+            }</strong>: $${coin.current_price.toLocaleString()}
+            <span class="${
+              coin.price_change_percentage_24h >= 0 ? "positive" : "negative"
+            }">
+              (${coin.price_change_percentage_24h.toFixed(2)}%)
+            </span>
+          </div>`
+            )
+            .join("");
+        } catch {
+          c.innerHTML = "Failed to load crypto.";
+        }
+      }
+
+      async function loadGitHub() {
+        const c = document.getElementById("githubContent");
+        try {
+          const data = await fetchRemote(
+            "https://api.github.com/search/repositories?q=created:>2025-01-01&sort=stars&order=desc&per_page=5"
+          );
+          c.innerHTML = data.items
+            .map(
+              (r) => `
+          <div class="item">
+            <a href="${r.html_url}" target="_blank"><strong>${
+                r.full_name
+              }</strong></a><br>
+            ⭐ ${r.stargazers_count.toLocaleString()} — ${r.description || ""}
+          </div>`
+            )
+            .join("");
+        } catch {
+          c.innerHTML = "Failed to load GitHub.";
+        }
+      }
+
+      async function loadHackerNews() {
+        const c = document.getElementById("hackerNewsContent");
+        try {
+          const data = await fetchRemote(
+            "https://hn.algolia.com/api/v1/search?tags=front_page"
+          );
+          c.innerHTML = data.hits
+            .slice(0, 5)
+            .map(
+              (s) => `
+          <div class="item">
+            <a href="${s.url || "#"}" target="_blank">${s.title}</a><br>
+            <small>${s.points} points by ${s.author} — ${timeAgo(
+                s.created_at
+              )}</small>
+          </div>`
+            )
+            .join("");
+        } catch {
+          c.innerHTML = "Failed to load HN.";
+        }
+      }
+
+      /* run once, then every minute */
+      const refreshAll = () => {
+        loadNews();
+        loadCrypto();
+        loadGitHub();
+        loadHackerNews();
+      };
+      refreshAll();
+      setInterval(refreshAll, 60000);
+    </script>
+  </body>
+</html>
